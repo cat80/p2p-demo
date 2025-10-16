@@ -27,7 +27,7 @@ class TestProtocol(unittest.TestCase):
 
     def test_create_message(self):
         """Test creating generic message"""
-        msg = protocol.create_message('test_type', {'key': 'value'})
+        msg = protocol.create_payload('test_type', {'key': 'value'})
         self.assertIsInstance(msg, bytes)
         self.assertTrue(msg.startswith(MAGIC_HEADER))
 

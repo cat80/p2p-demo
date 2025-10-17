@@ -55,12 +55,13 @@ class TestProtocol(unittest.TestCase):
         
         # Create BytesIO stream
         stream = io.BytesIO(full_message)
-        
+
+
         # Deserialize
         result, remaining = protocol.deserialize_stream(stream)
         
         # Check result
-        self.assertIsInstance(result, str)
+        self.assertIsInstance(result, dict)
         self.assertEqual(remaining, b'')
 
     def test_deserialize_stream_multiple_messages(self):
@@ -86,7 +87,7 @@ class TestProtocol(unittest.TestCase):
         result1, remaining = protocol.deserialize_stream(stream)
         
         # Check first result
-        self.assertIsInstance(result1, str)
+        self.assertIsInstance(result1, dict)
         
         # For now, we're just checking that it doesn't crash
         # A more complete test would check the actual content
@@ -96,7 +97,7 @@ class TestProtocol(unittest.TestCase):
         # Create a message
         original_data = {'test_type': 'test_type', 'payload': {'key': 'value'}}
         payload_bytes = json.dumps(original_data).encode('utf-8')
-        message_header = struct.pack(HEADER_FORMAT, MAGIC_HEADER, b'\x00\x00\x00\x00', 0)
+        message_header = struct.pack(HEADER_FORMAT, MAGIC_HEADER, b'\x00\x00\x00\x00', len(payload_bytes))
         full_message = message_header + payload_bytes
         
         # Create BytesIO stream
@@ -106,7 +107,8 @@ class TestProtocol(unittest.TestCase):
         result, remaining = protocol.deserialize_stream(stream, b'')
         
         # Check result
-        self.assertIsInstance(result, str)
+        self.assertIsInstance(result, dict)
+        self.assertEqual(result, {'test_type': 'test_type', 'payload': {'key': 'value'}})
 
     def test_deserialize_stream_incomplete_data(self):
         """Test handling of incomplete data"""

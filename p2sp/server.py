@@ -1,9 +1,6 @@
 import socket
 import threading
 import datetime
-
-from matplotlib.pyplot import savefig
-
 from protocol import protocol
 HOST = "127.0.0.1"
 PORT = 12345

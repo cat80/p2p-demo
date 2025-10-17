@@ -1,7 +1,5 @@
 import socket
 import threading
-import sys
-import logging
 import datetime
 #
 # from prompt_toolkit import PromptSession

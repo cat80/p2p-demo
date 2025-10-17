@@ -2,6 +2,8 @@ import struct
 import io
 import json
 from operator import index
+import datetime
+import time
 
 MAGIC_HEADER = b'\xab\xcd\xef\x88'
 # 定义进制的头 MAGIC +PAYLOADLEN+CHECKSUM+PAYLOAD
@@ -15,8 +17,10 @@ class protocol():
     def serialize_message(msgtype,payload=None):
         data = {
             "type":msgtype,
+            'timestamp':int(time.time()),
             "payload": payload or {}
         }
+
         payload_bytes = json.dumps(data).encode('utf8')
         message_header = struct.pack(HEADER_FORMAT,MAGIC_HEADER,b'\x00\x00\x00\x00',len(payload_bytes))
         return message_header+payload_bytes
@@ -69,7 +73,7 @@ class protocol():
         return protocol.serialize_message('normalmsg',{'message':message})
 
     @staticmethod
-    def create_signal_message(username,message):
+    def create_user_send_message(username, message):
         """
             创建一个单发的信息
         :param username:
@@ -97,3 +101,48 @@ class protocol():
         :return:
         """
         return protocol.serialize_message('reg', {'username': username})
+
+    @staticmethod
+    def create_sys_notify(message):
+        return protocol.serialize_message('sysmsg',payload={
+            'message':message
+        })
+    @staticmethod
+    def create_client_user_send_message(fromusername,message):
+        return protocol.serialize_message('usersend', payload={
+            "fromusername":fromusername,
+            'message': message
+        })
+
+    @staticmethod
+    def create_user_broadcast_message(fromusername, message):
+        return protocol.serialize_message('userbroadcast', payload={
+            "fromusername": fromusername,
+            'message': message
+        })
+
+    @staticmethod
+    def show_user_msg(payload):
+        """"
+            显示给用户的数据
+        """
+        if not payload or not isinstance(payload,dict) :
+            return f'消息不能为空，且消息必须为dict。payload:{payload}'
+        if 'type' not in payload:
+            return  f'未知的消息类型:{payload}'
+        msg_type = payload['type']
+        return_msg = ''
+        # 显示格式的为 username:msgcontent(datetime) 如：[系统通知]:欢迎新用户xxx(10:44）
+        payload_content =  payload['payload']
+        if msg_type =='sysmsg':
+            return_msg = f'[系统消息]:{payload_content['message']}'
+        elif msg_type == 'usersend':
+            return_msg = f'{payload_content["fromusername"]}悄悄对你说:{payload_content["message"]}'
+        elif msg_type == 'userbroadcast':
+            return_msg =  f'{payload_content["fromusername"]}:{payload_content["message"]}'
+        if return_msg:
+            send_time =  datetime.datetime.fromtimestamp(payload['timestamp'])
+            return_msg += f"({send_time.strftime('%H:%M')})"
+        else:
+            return_msg = f'{payload}'
+        return return_msg

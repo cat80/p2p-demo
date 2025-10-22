@@ -32,5 +32,8 @@ class ClientMessageHandler:
     async def handle_usersend(self, message: dict):
         print(protocol.show_user_msg(message))
 
+    async def handle_sysmsg(self, message: dict):
+        print(protocol.show_user_msg(message))
+
     async def handle_unknown_message(self, message: dict):
         print(f"Unknown message type from server: {message}")

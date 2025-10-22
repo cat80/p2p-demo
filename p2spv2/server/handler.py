@@ -5,7 +5,7 @@ from server import auth
 from server.db import AsyncSessionFactory
 from server.models import User, UserFriend, Group, GroupMember
 from common.protocol import protocol
-
+from server.services.user_services import UserServices
 if TYPE_CHECKING:
     from server.server import ChatServer
 
@@ -13,6 +13,8 @@ if TYPE_CHECKING:
 class ServerMessageHandler:
     def __init__(self, server: ChatServer):
         self.server = server
+        # 流入当前的服务对象
+        self.user_service = UserServices(server)
 
     async def handle_message(self, writer, message: dict):
         """
@@ -77,73 +79,41 @@ class ServerMessageHandler:
         writer.write(response)
         await writer.drain()
 
+    async def write_message_with_drain(self,writer,payload,msg_type=None):
+        if not isinstance(payload, (bytes,bytearray)):
+            if  msg_type:
+                payload = protocol.create_payload( msg_type, payload)
+            else:
+                payload =  protocol.create_normal_message(message=payload)
+        writer.write(payload)
+        await writer.drain()
 
     async def handle_unknown_message(self, writer, user, payload: dict):
         print(f"Unknown message type: {payload}")
-        response = protocol.create_normal_message("Unknown command")
-        writer.write(response)
-        await writer.drain()
+        await self.write_message_with_drain(writer,'未知的命令')
+
 
     async def handle_login(self, writer, user, payload: dict):
+
         username = payload.get('username')
         password = payload.get('password')
+        loginip = writer.get_extra_info('peername')[0] if writer.get_extra_info('peername') else ''
+        login_ret,user =await self.user_service.login(username, password,loginip)
+        if login_ret:
+            self.server.online_users[user.id] = writer
+            response_payload = {
+                'message': f"欢迎, {username}!",
+                'auth_token': user.auth_token,
+                'is_admin': user.is_admin
+            }
+            await self.write_message_with_drain(writer,response_payload,'login_success')
+        else:
+            await self.write_message_with_drain(writer,protocol.create_sys_notify(user))
 
-        if not username or not password:
-            response = protocol.create_normal_message("Username and password are required.")
-            writer.write(response)
-            await writer.drain()
-            return
-
-        async with AsyncSessionFactory() as session:
-            async with session.begin():
-                result = await session.execute(select(User).where(User.username == username))
-                user = result.scalars().first()
-
-                if not user:
-                    response = protocol.create_normal_message("Invalid username or password.")
-                    writer.write(response)
-                    await writer.drain()
-                    return
-
-                try:
-                    salt, stored_hash = user.password_hash.split(':')
-                except ValueError:
-                    response = protocol.create_normal_message("Server error: password format is incorrect.")
-                    writer.write(response)
-                    await writer.drain()
-                    return
-
-                if not auth.verify_password(stored_hash, salt, password):
-                    response = protocol.create_normal_message("Invalid username or password.")
-                    writer.write(response)
-                    await writer.drain()
-                    return
-                
-                if user.status == 0:
-                    response = protocol.create_normal_message("User is banned.")
-                    writer.write(response)
-                    await writer.drain()
-                    return
-
-                auth_token = auth.generate_auth_token()
-                user.auth_token = auth_token
-                await session.commit()
-
-                self.server.online_users[user.id] = writer
-                
-                response_payload = {
-                    'message': f"Welcome, {username}!",
-                    'auth_token': auth_token,
-                    'is_admin': user.is_admin
-                }
-                response = protocol.create_payload('login_success', response_payload)
-                writer.write(response)
-                await writer.drain()
 
     async def handle_reg(self, writer, user, payload: dict):
         username = payload.get('username')
         password = payload.get('password')
-
         if not username or not password:
             response = protocol.create_normal_message("Username and password are required.")
             writer.write(response)

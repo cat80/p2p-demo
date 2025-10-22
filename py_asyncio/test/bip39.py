@@ -316,7 +316,7 @@ if __name__ == "__main__":
 
         right_send_phrase = ['glow','abuse','client','believe','lift','trial','million','habit','demand','bronze','bind','baby']
         wrong_send_phrase = ['glow','abuse','client','believe','lift','trial','million','habit','demand','bronze','bind','apple']
-
+        print(' '.join(right_send_phrase))
         print(check_seed_phrase(right_send_phrase))
         print(check_seed_phrase(wrong_send_phrase))
 

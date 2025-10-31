@@ -117,7 +117,8 @@ class Minner:
         self.stop_mining_event.set()
         while self.minner_task and not self.minner_task.done():
             log.debug(f'waiting mining task quit....')
-            log.debug(f'waiting mining task quit....')
+            await self.minner_task
+            log.debug(f'mining task already quit....')
 
         self.stop_mining_event.clear()  # 清除消息量
         self.minner_task = asyncio.create_task(self.do_minner())

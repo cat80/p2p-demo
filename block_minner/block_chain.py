@@ -15,7 +15,6 @@ from typing import List
 from jsonschema.validators import create
 
 from config import setup_logging
-setup_logging()
 
 log = logging.getLogger(__name__)
 
@@ -277,4 +276,5 @@ async def run_main():
 
     await asyncio.gather(minner.start(),input_task(minner))
 if __name__ == "__main__":
+    setup_logging()
     asyncio.run(run_main())

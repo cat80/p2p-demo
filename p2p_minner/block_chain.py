@@ -24,7 +24,7 @@ def int_to_bytes(i:int):
 
 class Block:
     BLOCK_BIN_FORMAT = '<32sIIII'
-    DEFAULT_BITS = 3 # 这里的难度代码要运算的次数，即hash前面N的个数.比如4代表前四个字节0x00000000aa才符合要求，要计算255^3才有可能。
+    DEFAULT_BITS = 4 # 这里的难度代码要运算的次数，即hash前面N的个数.比如4代表前四个字节0x00000000aa才符合要求，要计算255^3才有可能。
     BLOCK_BIN_LEN = 64
     prev_hash:bytes
     bits: int

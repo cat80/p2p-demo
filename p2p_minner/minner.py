@@ -1,7 +1,7 @@
 import logging
 import threading
 import asyncio
-from .block_chain import Block,BlockChain
+from p2p_minner.block_chain import BlockChain,Block
 log = logging.getLogger(__name__)
 class Minner:
     def __init__(self,block_chain:BlockChain,stop_event:threading.Event):

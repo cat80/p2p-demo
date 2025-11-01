@@ -30,6 +30,32 @@ class Peer:
         except Exception as e :
             log.exception(f"消息发送失败:{self.node_id}")
             await self.node.remove_node(self)
+    async def handler_msg_notify_new_node(self,payload):
+        #处理通知新用户
+        log.debug(f'开始处理消息notify_new_node')
+        try:
+            remote_peer_host = payload.get('ip')
+            remote_peer_ip = payload.get('port')
+            peer_node_id = payload.get('node_id')
+            if not remote_peer_ip or not remote_peer_host or not peer_node_id:
+                log.debug('')
+            if peer_node_id in self.node.peers:
+                log.debug(f'peer:{payload} 已经在连接池中不再尝试连接')
+                return
+            log.debug(f'开始连接新节点')
+            remote_peer = await self.node.outgoing_connection(remote_peer_host,remote_peer_ip)
+            if remote_peer:
+                # 握手成功广播消息
+                log.debug(f'新节点连接成功,广播给自己的邻近节点')
+                await  self.node.broadcast("notify_new_node",payload,remote_peer)
+            else:
+                log.debug(f'新节点连接失败:{payload}')
+
+        except Exception as e:
+            log.debug('节点处理失败',exc_info=True)
+
+    async def handler_msg_unkown(self,payload):
+        log.debug(f'未实现的消息处理，payload:{payload}')
     async def on_recv_message_loop(self):
         log.debug(f'开始循环处理接收节点{self.node_id}消息')
         buffer = b''
@@ -38,14 +64,17 @@ class Peer:
                 message,buffer = await Protocol.deserialize_stream(self.reader, buffer)
                 # 接收到了消息
                 if message is None:
-                    log.debug(f'连接节点失败:{self.node_id},{self.connect_info}')
+                    log.debug(f'节点通信失败:{self.node_id},{self.connect_info}')
                     break
                 log.debug(f"接收到{self.node_id}消息:{message}")
+                # 这里处理节点消息，现在都写在一起
+                msg_type = message.get("type")
+                invoke_handler = getattr(self,f"handler_msg_{msg_type}",self.handler_msg_unkown)
+                await invoke_handler(message.get('payload'))
         except Exception as e:
             log.exception(f"节点{self.node_id}消息接收失败")
         finally:
             await self.node.remove_node(self)
-
 
     async def close(self):
         if not self.recv_message_loop_task.done():
@@ -53,9 +82,9 @@ class Peer:
         if not self.writer.is_closing():
             try:
                 self.writer.close()
-                await self.writer.waite_closed()
+                await self.writer.wait_closed()
             except Exception as e:
-                log.exception(f"节点连接关闭失败:{self.node_id}")
+                log.debug(f"节点关闭失败:{self.node_id}",exc_info=True)
     def set_connect_info(self,connect_info):
         self.connect_info = connect_info
 
@@ -94,13 +123,15 @@ class P2PNode:
         """
         if port == self.node_id:
             log.debug(f'连接的为本机监听端口，终止连接.port:{port}')
-            return
+            return False
         try:
+            log.debug(f'开始连接节点,{host}:{port}')
             reader ,writer =await asyncio.open_connection(host,port)
             #连接成功
             peer_info = writer.get_extra_info('peername')
             log.debug(f'node {peer_info} 连接成功.')
-            await self.start_node_handshake(reader,writer,1)
+            return await self.start_node_handshake(reader,writer,1)
+
         except Exception as e:
             log.exception("连接出错")
             log.debug(f'连接节点[{host}:{port}]失败')
@@ -162,10 +193,30 @@ class P2PNode:
             self.peers[remote_node_id] = peer
             # 开始通知其它节点有新的节点到了
             await self.broadcast("notify_new_node", peer.connect_info,  exclude=peer)
+            return peer
         except Exception as e:
-            log.exception('层手失败') #连接
+            log.exception('握手失败') #连接
             if not writer.is_closing():
                 await writer.close() # 关闭连接
+async def run_input_task(node:P2PNode):
+    while True:
+        try:
+            input_txt = await  asyncio.to_thread(input,">")
+
+            cmd = input_txt.split(' ')[0]
+            if cmd == "bc":
+                log.debug(f"广播{msg}消息")
+                msg =  input_txt.split(' ')[-1]
+                await node.broadcast("ping",{"msg":msg})
+            elif cmd == "stat":
+                # 显示当前节点信息
+                for item in node.peers.values():
+                    log.debug(item.connect_info)
+                log.debug(f"维护节点数：{len(node.peers)}")
+            else:
+                log.debug(f'不支持的命令:{cmd}')
+        except (Exception):
+            log.exception("处理出错")
 async  def run_main():
     # 运行主方法
     args = sys.argv
@@ -179,7 +230,7 @@ async  def run_main():
     for peer_addr in default_peers:
         log.debug(f'尝试连接到节点:{peer_addr}')
         asyncio.create_task(node.outgoing_connection(peer_addr[0],peer_addr[1]))
-
+    asyncio.create_task(run_input_task(node))
     await node.start(host,listen_port)
 
 if __name__ == "__main__":

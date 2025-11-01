@@ -23,11 +23,11 @@ def int_to_bytes(i:int):
     return i.to_bytes(length=4,byteorder="little")
 
 class Block:
-    BLOCK_BIN_FORMAT = '<32sIIII'
-    DEFAULT_BITS = 4 # 这里的难度代码要运算的次数，即hash前面N的个数.比如4代表前四个字节0x00000000aa才符合要求，要计算255^3才有可能。
+    BLOCK_BIN_FORMAT = '<32sI4sII'
+    DEFAULT_BITS = bytes.fromhex("000000a8") # 这里的难度代码要运算的次数，即hash前面N的个数.比如4代表前四个字节0x00000a8才符合要求，要计算255^3才有可能。
     BLOCK_BIN_LEN = 64
     prev_hash:bytes
-    bits: int
+    bits: bytes
     timestamp: int
     nonce:int
     height:int # 区块高度
@@ -65,9 +65,8 @@ class Block:
 
     def is_validate(self):
         # 验证是否是有效的区块,这里只验证hash的pow是否合法
-        start_bytes = b'\x00' * self.bits
-        # 计算pow
-        if not self.hash().startswith(start_bytes) :
+         # 计算pow
+        if   self.hash() > self.bits :
             # log.debug(f'当前区块POW验证失败.应该为：{Block.DEFAULT_BITS},实际:{self.hash().hex()}')
             return False
         return True

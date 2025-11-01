@@ -38,13 +38,15 @@ class Peer:
             remote_peer_ip = payload.get('port')
             peer_node_id = payload.get('node_id')
             if not remote_peer_ip or not remote_peer_host or not peer_node_id:
-                log.debug('')
+                log.debug('节点信息不完整')
+            # 这里应该去连接，因为有可能原来的节点下线。
             if peer_node_id in self.node.peers:
                 log.debug(f'peer:{payload} 已经在连接池中不再尝试连接')
                 return
             log.debug(f'开始连接新节点')
             remote_peer = await self.node.outgoing_connection(remote_peer_host,remote_peer_ip)
             if remote_peer:
+                log.debug(f'remote peer:{remote_peer}')
                 # 握手成功广播消息
                 log.debug(f'新节点连接成功,广播给自己的邻近节点')
                 await  self.node.broadcast("notify_new_node",payload,remote_peer)
@@ -54,6 +56,12 @@ class Peer:
         except Exception as e:
             log.debug('节点处理失败',exc_info=True)
 
+    async def handler_msg_ping(self, payload):
+        try:
+            self.writer.write(Protocol.serialize_message("pong",{}))
+            await self.writer.drain()
+        except Exception as e:
+            log.debug("节点keepalive回复失败")
     async def handler_msg_unkown(self,payload):
         log.debug(f'未实现的消息处理，payload:{payload}')
     async def on_recv_message_loop(self):
@@ -103,10 +111,21 @@ class P2PNode:
         self.server = await asyncio.start_server(
             self.handler_coming_client,host,port
         )
-
+        # keep alive
+        asyncio.create_task(self.keep_alive())
         log.debug(f'本地服务启动成功，监听端口：{port}')
         async with self.server:
             await self.server.serve_forever()
+    async def keep_alive(self):
+        while True:
+            try:
+                await asyncio.sleep(90)
+                #
+                log.debug('开始广播keep-alive')
+                await self.broadcast("ping",{})
+                log.debug('广播keep-alive结束')
+            except Exception as e :
+                log.debug("keepalive 广播失败",exc_info=True)
 
     async def handler_coming_client(self,reader,writer):
         """
@@ -151,7 +170,7 @@ class P2PNode:
         # 处理握手，交易通信协议处理重复连接问题。
         # is_initiative 是否为主动连接，为false则为accept
         try:
-            log.info(f'开始处理握手，remote peer:{writer.get_extra_info("peerinfo")},是否主动连接:{is_initiative}')
+            log.info(f'开始处理握手，remote peer:{writer.get_extra_info("peername")},是否主动连接:{is_initiative}')
             frist_message = {
                 "type":"hello",
                 'node_id':self.node_id,
@@ -176,10 +195,11 @@ class P2PNode:
                 # 处理重复连接问题。这个对等网络很常见
                 # 规定只能id小的连id大的的。
                 if is_initiative and self.node_id > remote_node_id:
-                    raise Exception("主动连接时,本地node id 必须大于当前节点id,")
+                    raise Exception(f"主动连接时,本地id {self.node_id} 必须小于远程节点id {remote_node_id}")
                 elif not is_initiative and self.node_id < remote_node_id:
-                    raise Exception("被动(accept)连接时,remote_id 必须小与当前节点id ")
+                    raise Exception(f"被动(accept)连接时,本地id{self.node_id} 必须大于remote节点{remote_node_id} ")
                 else:
+                    log.debug('使用新连接代替旧的node连接')
                     # 当现在存在的连接关闭掉，使用最新的连接
                     await self.peers[remote_node_id].close()
             log.debug('连接成功...')
@@ -197,7 +217,8 @@ class P2PNode:
         except Exception as e:
             log.exception('握手失败') #连接
             if not writer.is_closing():
-                await writer.close() # 关闭连接
+                writer.close()
+                await writer.wait_closed() # 关闭连接
 async def run_input_task(node:P2PNode):
     while True:
         try:
@@ -205,8 +226,8 @@ async def run_input_task(node:P2PNode):
 
             cmd = input_txt.split(' ')[0]
             if cmd == "bc":
-                log.debug(f"广播{msg}消息")
                 msg =  input_txt.split(' ')[-1]
+                log.debug(f"广播{msg}消息")
                 await node.broadcast("ping",{"msg":msg})
             elif cmd == "stat":
                 # 显示当前节点信息

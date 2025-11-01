@@ -7,12 +7,12 @@ import time
 
 def start_all():
     port = 17890
-    for index in range(0,5):
+    for index in range(0,4):
 
         node_id = port+index
         print(f'启动节点:{node_id}')
         #  cmd = [sys.executable,r'D:\prj\python\p2p-demo\block_minner\tools\test_app.py ' ,str(index)]
-        script_path = r'D:/prj/python/p2p-demo/block_minner/main.py'
+        script_path = r'D:/prj/python/p2p-demo/p2p_minner/main.py'
         cmd_string = f'start "P2P Node {node_id}" cmd /k {sys.executable} {script_path} {node_id}'
 
         print(f"正在执行: {cmd_string}")

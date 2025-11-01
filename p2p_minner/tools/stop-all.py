@@ -1,8 +1,7 @@
 import psutil
 
 prefix = "python.exe"
-script_filename = 'block_minner/main.py'
-script_filename = 'python.exe'
+script_filename = 'p2p_minner/main.py'
 killed_count = 0
 
 for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
